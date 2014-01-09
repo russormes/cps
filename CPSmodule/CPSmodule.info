@@ -1,0 +1,5 @@
+name = CPSmodule
+description = "Custom code for cps admin"
+package = Nectar
+core = 7.x
+files[] = CPSmodule.module

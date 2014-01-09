@@ -1,0 +1,26 @@
+<?php //	$form['field_payment_comment']['#value'] =;
+//	watchdog('CPSmodule', 'form_alter: arg = %value', array('%value' => $form_state['build_info']['args']));
+/** Add the conditional if you want to hide the field only on certain forms (e.g. add) but not on others (e.g edit)
+      if (arg(0) == 'node' && arg(1) == 'add') { **/
+/** Don't use unset() as then the default values is not recorded on node creation. 
+      unset($form['field_payment_date_entered']); **/
+watchdog('CPSmodule', 'The value in the text box is: %value', array('%value' => $form_state['values']['add_payment']));
+    $form_state['redirect'] = 'node/add/payment/'.$form_state['values']['add_payment'];
+
+
+  // Get the field meta data for the field_id.
+  $field_name = 'field_property_street';
+  $field_info = field_info_field($field_name);
+  $field_id = $field_info['id'];
+
+//Good method for retrieving field values without loading the nodes. However, Node titles are not 
+// fields and reference entities are returned as the target id number. 
+$field_values = db_select('field_revision_field_property_street', 'f')
+  ->fields('f', array('entity_id', 'field_property_street_tid'))
+  ->condition('entity_type', $entity_type)
+  ->condition('bundle', $bundle)
+  ->condition('entity_id', $nids, 'IN')
+  ->condition('deleted', 0)
+  ->execute()
+  ->fetchAllKeyed();
+?>
