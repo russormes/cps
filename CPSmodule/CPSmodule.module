@@ -1,14 +1,53 @@
 <?php
+
+function CPSmodule_form_charge_node_form_alter(&$form, &$form_state, $form_id) {
+   //dpm("_charge_node_form_alter");
+   $form['field_charge_date_entered']['#access'] = 0;
+   $form['title']['#access'] = 0;
+}
+
+function CPSmodule_form_property_node_form_alter(&$form, &$form_state, $form_id) {
+   //dpm("_property_node_form_alter");
+   $form['field_property_service_charge'][LANGUAGE_NONE]['#ajax'] = array(
+    // When 'event' occurs, Drupal will perform an ajax request in the
+    // background. Usually the default value is sufficient (eg. change for
+    // select elements), but valid values include any jQuery event,
+    // most notably 'mousedown', 'blur', and 'submit'.
+    'event' => 'change',
+    'callback' => 'CPSmodule_ajax_form_property_node_callback',
+    'wrapper' => 'sc_payment_update',
+  );
+   $form['field_property_sc_frequency'][LANGUAGE_NONE]['#ajax'] = array(
+    // When 'event' occurs, Drupal will perform an ajax request in the
+    // background. Usually the default value is sufficient (eg. change for
+    // select elements), but valid values include any jQuery event,
+    // most notably 'mousedown', 'blur', and 'submit'.
+    //'event' => 'change',
+    'callback' => 'CPSmodule_ajax_form_property_node_callback',
+    'wrapper' => 'sc_payment_update',
+  );
+  $form['field_property_sc_payments']['und']['#prefix'] = '<div id="sc_payment_update">';
+  $form['field_property_sc_payments']['und']['#suffix'] = '</div>';
+  $form['field_property_sc_payments']['und'][0]['amount']['#default_value'] = CPSmodule_sc_payments_value($form, $form_state);
+  $form_state['input']['field_property_sc_payments']['und'][0]['amount'] = CPSmodule_sc_payments_value($form, $form_state);
+  $form['field_property_sc_payments']['und'][0]['currency']['#default_value'] = "GBP";
+  //dpm('form:');
+  //dpm($form);
+  //dpm('form_state[input]:');
+  //dpm($form_state['input']);
+  //$node = $form['#node'];
+  //dpm('node:');
+  //dpm($node);
+}
+
 function CPSmodule_form_payment_node_form_alter(&$form, &$form_state, $form_id) {
-  //drupal_set_message("Called: _alter");
-  //Hide the date entered field from the user as it is autoamaticallly filled in.
+  //dpm("payment_node_form_alter");
+  //Hide the date entered field from the user as it is automaticallly filled in.
   //note that this might not be needed as node creation time is stored in the db by core code. 
   $form['field_payment_date_entered']['#access'] = 0;
-  $form['field_payment_allocation'][LANGUAGE_NONE][0]['field_payment_charge_allocate']['#access'] = 0;
+  $form['title']['#access'] = 0;
+  $form['field_payment_charge']['#access'] = 0;
   $node = $form['#node'];
- // $form_state['rebuild'] = TRUE;
-  ////dpm($form_state);
-  ////dpm($node);
   $onid = '';
   $arg_array = arg();
   $prop_nid = end($arg_array);
@@ -19,53 +58,32 @@ function CPSmodule_form_payment_node_form_alter(&$form, &$form_state, $form_id) 
       $prop_node = node_load($prop_nid);
       $onid = $prop_node->field_property_owner['und'][0]['target_id'];
       $own_node = node_load($onid);
-      $form['field_payment_owner']["und"]['#default_value'] = $own_node->nid;
+      $form['field_payment_owner'][LANGUAGE_NONE][0]['target_id']['#default_value'] = "$own_node->title ($own_node->nid)";
+      $form['field_payment_property'][LANGUAGE_NONE]['#default_value'] = $prop_node->nid;
     }
   }
     // Get the list of options to populate the first dropdown.    
   $property_options = CPSmodule_property_dropdown_options($onid);
-    // If we have a value for the property dropdown from $form_state['values'] we use
-    // this both as the default value for the property dropdown and also as a
-    // parameter to pass to the function that retrieves the options for the
-    // charge dropdown.
-  $value_dropdown_property = 
-    isset($form_state['values']['field_payment_allocation'][LANGUAGE_NONE][0]['field_payment_property']) ?
-      $form_state['values']['field_payment_allocation'][LANGUAGE_NONE][0]['field_payment_property'] :
-        $node->ajax_lists['property'];
-  $form['field_payment_allocation'][LANGUAGE_NONE][0]['field_payment_property'] = array(
-        '#type' => 'select',
-        '#title' => 'Property',
-        '#options' => isset($property_options) ? $property_options : $node->ajax_lists['property'],
-        '#default_value' => $value_dropdown_property,
-	'#validated' => True,
-        // Bind an ajax callback to the change event (which is the default for the
-        // select form type) of the first dropdown. It will replace the second
-        // dropdown when rebuilt
-        '#ajax' => array(
-            // When 'event' occurs, Drupal will perform an ajax request in the
-            // background. Usually the default value is sufficient (eg. change for
-            // select elements), but valid values include any jQuery event,
-            // most notably 'mousedown', 'blur', and 'submit'.
-            'event' => 'change',
-            'callback' => 'CPSmodule_ajax_form_node_callback',
-            'wrapper' => 'dropdown_charge_replace',
-        ),
-    );
-  
-  $form['field_payment_allocation'][LANGUAGE_NONE][0]['field_payment_charge_allocation'] = array(
-        '#type' => 'select',
-        '#title' => 'Charge to allocate payment to:',
-        '#prefix' => '<div id="dropdown_charge_replace">',
-        '#suffix' => '</div>',
-        // when the form is rebuilt during ajax processing, the $value_dropdown_first variable
-        // will now have the new value and so the options will change
-        '#options' => CPSmodule_charge_dropdown_options($value_dropdown_property),
-        '#default_value' => isset($form_state['values']['field_payment_allocation'][LANGUAGE_NONE][0]['field_payment_charge_allocation']) ?
-	    $form_state['values']['field_payment_allocation'][LANGUAGE_NONE][0]['field_payment_charge_allocation'] :
-	    $node->ajax_lists['charge'],
-	'#validated' => True,
-    );
+  $form['field_payment_property'][LANGUAGE_NONE]['#options'] = $property_options;
+}
+
+function CPSmodule_sc_payments_value($form, $form_state) {
+  //dpm('_sc_payments_value called');
+  $sv = isset($form_state['values']['field_property_sc_frequency'][LANGUAGE_NONE][0]['value']) ?
+           $form_state['values']['field_property_sc_frequency'][LANGUAGE_NONE][0]['value'] :
+	   $form['#node']->field_property_sc_frequency['und'][0]['value'];
+  $amount = isset($form_state['input']['field_property_service_charge']['und'][0]['amount']) ?
+              $form_state['input']['field_property_service_charge']['und'][0]['amount'] :
+	      $form['#node']->field_property_service_charge['und'][0]['amount'];
+  switch ($sv) {
+    case '0':
+      return round($amount/12,2);
+    case '1':
+      return round($amount/2,2);
+    case '2':
+      return $amount;
   }
+}
   
  /**
  * Helper function to populate the first dropdown. This gets
@@ -77,215 +95,53 @@ function CPSmodule_property_dropdown_options($key = '') {
   $query = new EntityFieldQuery();
   $return_values = array();
   $query->entityCondition('entity_type', 'node')
-    ->entityCondition('bundle', 'property')
-    ->fieldCondition('field_property_owner', 'target_id', $key, '=');
+    ->entityCondition('bundle', 'property');
+    if (!empty($key)) { $query->fieldCondition('field_property_owner', 'target_id', $key, '='); }
   $result = $query->execute();
-    if (count($result) > 0) {
-      $node_list = $result['node'];
-      foreach ($node_list as $node_obj) {
-	$node_id = $node_obj -> nid;
-	$sql = 'SELECT nid, title FROM {node} WHERE nid = :nids';
-	$query_result = db_query($sql, array(':nids' => $node_id))->fetchAllAssoc('nid');
-	foreach ($query_result as $val) {
-	  $return_values[$node_id] = $val -> title;
-	}
-      }
-  } else {return array('000' => 'All properties');}
-  return $return_values;
-}
-
- /**
- * Helper function to populate the second dropdown list based on the value set
- * in the first dropdown and passed as $value_dropdown_property. This gets
- * the charges associated with the property from the database. 
- *
- * @return array of options
- */
-function CPSmodule_charge_dropdown_options($key = '') {
-
-  $query = new EntityFieldQuery();
-  $return_values = array();
-  $query->entityCondition('entity_type', 'node')
-    ->entityCondition('bundle', 'charge')
-    ->fieldCondition('field_charge_property_id', 'target_id', $key, '=');
-  $result = $query->execute();
-    if (count($result) > 0) {
-      $node_list = $result['node'];
-      foreach ($node_list as $node_obj) {
-	$node_id = $node_obj -> nid;
-	$sql = 'SELECT nid, title FROM {node} WHERE nid = :nids';
-	$query_result = db_query($sql, array(':nids' => $node_id))->fetchAllAssoc('nid');
-	foreach ($query_result as $val) {
-	  $return_values[$node_id] = $val -> title;
-	}
-      }
-  } else {return array('0' => 'No charges');}
+  $node_list = $result['node'];
+  foreach ($node_list as $node_obj) {
+    $node_id = $node_obj -> nid;
+    $sql = 'SELECT nid, title FROM {node} WHERE nid = :nids';
+    $query_result = db_query($sql, array(':nids' => $node_id))->fetchAllAssoc('nid');
+    foreach ($query_result as $val) {
+      $return_values[$node_id] = $val -> title;
+    }
+  } //else {return array('000' => 'All properties');}
   return $return_values;
 }
 
 /**
  * Returns changed part of the form.
  *
- * @return renderable array
- *
- * @see CPSmodule_form_payment_node_form_alter()
- */
-function CPSmodule_ajax_form_node_callback($form, $form_state) {
- // drupal_set_message("Called: _ajax_callback");
-  return $form['field_payment_allocation'][LANGUAGE_NONE][0]['field_payment_charge_allocation'];
-}
+*/
 
+function CPSmodule_ajax_form_property_node_callback($form, $form_state) {
+  //dpm("Called: _ajax_form_property_node_callback");
+  return $form['field_property_sc_payments'];
+}
 /**
  * Implements hook_node_submit().
  * @see CPSmodule_form_payment_node_form_alter()
  */
 function CPSmodule_node_submit($node, $form, &$form_state) {
- // drupal_set_message("Called: _submit");
+  //dpm("Called: _submit");
+  $values = $form_state['values'];
   switch ($node->type) {
       case 'payment':
-	$values = $form_state['values'];
-	// Move the new data into the node object.
-	$node->ajax_lists['property'] = $values['field_payment_allocation'][LANGUAGE_NONE][0]['field_payment_property'];
-	$node->ajax_lists['charge'] = $values['field_payment_allocation'][LANGUAGE_NONE][0]['field_payment_charge_allocation'];
-        $node->field_payment_allocation[LANGUAGE_NONE][0]['field_payment_charge_allocate'][LANGUAGE_NONE][0]['target_id'] = $node->ajax_lists['charge'];
-	$form_state['values']['field_payment_allocation']['und'][0]['field_payment_charge_allocate']['und'][0]['target_id'] = $node->ajax_lists['charge'];
-	$_SESSION['node'] = $node;
-
+	$pnid = $values['field_payment_property']['und'][0]['target_id'];
+	$pnode = node_load($pnid);
+	$date = $form_state['input']['field_payment_date_received']['und'][0]['value']['date'];
+	$node->title = $pnode->title.' : £'.$values['field_payment_amount']['und'][0]['amount'].' : '.$date;
+	break;
+      case 'charge':
+	$pnid = $values['field_charge_property_id']['und'][0]['target_id'];
+	$ctypetid = $values['field_charge_type']['und'][0]['tid'];
+	$pnode = node_load($pnid);
+	$ctype = taxonomy_term_load($ctypetid);
+	$node->title = $pnode->title.' '.$ctype->name.': £'.$values['field_charge_amount']['und'][0]['amount'];
+	break;
   }
- //dpm('_node_submit: ');
- //dpm($node);
- //dpm($form_state);
-}
-
-/**
- * Implements hook_node_prepare().
- *
- * @see CPSmodule_form_payment_node_form_alter()
- */
-function CPSmodule_node_prepare($node) {
- // drupal_set_message("Called: _prepare");
-  switch ($node->type) {
-    case 'payment':
-	if (empty($node->ajax_lists)) {
-	  // Set default values, since this only runs when adding a new node.
-	  $arg_array = arg();
-	  $prop_nid = end($arg_array);
-	  $node->ajax_lists['property'] = $prop_nid;
-	  $node->ajax_lists['charge'] = '';
-	}
-  }
-}
-
-/**
- * Implements hook_node_load().
- *
- * @see CPSmodule_form_payment_node_form_alter()
- */
-function CPSmodule_node_load($nodes, $types) {
-//  drupal_set_message("Called: _load");
-  foreach ($nodes as &$node) {
-    switch ($node->type) {
-      case 'payment':
-        $result = db_query('SELECT * FROM {ajax_payment_node_form_alter} WHERE nid IN(:nids)',
-			   array(':nids' => array_keys($nodes)))->fetchAllAssoc('nid');
-	$node->ajax_lists['property'] =
-	  isset($result[$node->nid]->property) ?
-	    $result[$node->nid]->property : 'All';
-	  $node->ajax_lists['charge'] =
-	  isset($result[$node->nid]->charge) ?
-	    $result[$node->nid]->charge : '';
-	  //dpm('_node_load');
-	  $fc = entity_load('field_collection_item', array($node->field_payment_allocation[LANGUAGE_NONE][0]['value']));
-	  //dpm($node);
-	  //dpm($fc);
-    }
-  }
-}
-
-/**
- * Implements hook_node_insert().
- *
- * @see CPSmodule_form_payment_node_form_alter()
- */
-function CPSmodule_node_insert($node) {
-//  drupal_set_message("Called: _insert");
-  switch ($node->type) {
-      case 'payment':
-      //$form['field_payment_allocation'][LANGUAGE_NONE][0]['field_payment_charge_allocate']['#access'] = 1;
-      if (isset($node->ajax_lists)) {
-	db_insert('ajax_payment_node_form_alter')
-	  ->fields(array(
-	    'nid' => $node->nid,
-	    'property' => $node->ajax_lists['property'],
-	    'charge' => $node->ajax_lists['charge'],
-	  ))
-	  ->execute();
-      }
-      //dpm('_node_insert');
-      $fc = entity_load('field_collection_item', array($node->field_payment_allocation[LANGUAGE_NONE][0]['value']));
-      //dpm($node);
-      //dpm($fc);
-  }
-}
-
-/**
- * Implements hook_entity_presave().
- */
-function CPSmodule_entity_presave($entity, $type) {
-  switch ($type) {
-    case 'field_collection_item':
-      $node = $_SESSION['node'];
-      $entity->field_payment_charge_allocate[LANGUAGE_NONE][0]['target_id'] = $node->ajax_lists['charge'];
-      unset($_SESSION['node']);
-      //dpm('_entity_presave');
-      //dpm($entity);
-  }
-}
-
-/**
- * Implements hook_entity_insert().
- */
-function CPSmodule_entity_insert($entity, $type) {
-  //dpm('_entity_insert');
-  //dpm($entity);
-}
-
-
-/**
- * Implements hook_node_update().
- * @see CPSmodule_form_payment_node_form_alter()
- */
-function CPSmodule_node_update($node) {
-  //drupal_set_message("Called: _update");
-  switch ($node->type) {
-      case 'payment':
-	if (db_select('ajax_payment_node_form_alter', 'a')->fields('a')->condition('nid', $node->nid, '=')->execute()->fetchAssoc()) {
-	  db_update('ajax_payment_node_form_alter')
-	    ->fields(array(
-	      'property' => $node->ajax_lists['property'],
-	      'charge' => $node->ajax_lists['charge'],
-	    ))
-	    ->condition('nid', $node->nid)
-	    ->execute();
-	}
-	else {
-	  // Cleaner than doing it again.
-	  CPSmodule_node_insert($node);
-	}
-  }
-}
-
-/**
- * Implements hook_node_delete().
- * @see CPSmodule_form_payment_node_form_alter()
- */
-function CPSmodule_node_delete($node) {
-  switch ($node->type) {
-      case 'payment':
-	db_delete('ajax_payment_node_form_alter')
-	  ->condition('nid', $node->nid)
-	  ->execute();
-  }
+//dpm('_node_submit: ');
 }
 
 /**
@@ -297,12 +153,51 @@ function CPSmodule_menu() {
     'title' => 'Add new payment',
     'page callback' => 'drupal_get_form',
     'page arguments' => array('add_payment_by_code_form'),
-    'access callback' => TRUE,
+    'access callback' => 'user_access',
+    'access arguments' => array('Add Payment'),
+    'type' => MENU_NORMAL_ITEM,
+  );
+  $items['list_payments_by_prop'] = array(
+    'title' => 'List payments by property',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('list_payments_by_prop_form'),
+    'access callback' => 'user_access',
+    'access arguments' => array('List Payment by Prop'),
+    'type' => MENU_NORMAL_ITEM,
+  );
+  $items['list_charges_by_prop'] = array(
+    'title' => 'List charges by property',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('list_charges_by_prop_form'),
+    'access callback' => 'user_access',
+    'access arguments' => array('List Charge by Prop'),
     'type' => MENU_NORMAL_ITEM,
   );
   
   return $items;
 }
+
+/**
+* Implementation of hook_permission()
+*/
+function CPSmodule_permission() {
+  //dpm('CPSmodule_permission');
+  return array(
+    'Add Payment' => array(
+      'title' => t('Add a payment'),
+      'description' => t('Allow users to add a payment'),
+    ),
+    'List Payment by Prop' => array(
+      'title' => t('List payments by prop'),
+      'description' => t('Allow users to list payments by entering property code'),
+    ),
+    'List Charge by Prop' => array(
+      'title' => t('List charges by prop'),
+      'description' => t('Allow users to list charges by entering property code'),
+    ),
+  );
+}
+
 
 /**
 * Define a form. The entry form for adding the apartment code for payment. 
@@ -312,6 +207,42 @@ function add_payment_by_code_form() {
     '#title' => t('Payment code'),
     '#type' => 'textfield',
     '#description' => t('Please enter the CPS payment code.'),
+  );
+
+  $form['submit'] = array(
+    '#type' => 'submit',
+    '#value' => t('Submit')
+  );
+
+  return $form;
+}
+
+/**
+* Define a form. The entry form for listing the payments from the property code. 
+*/
+function list_payments_by_prop_form() {
+  $form['list_payments_by_prop'] = array(
+    '#title' => t('Property code'),
+    '#type' => 'textfield',
+    '#description' => t('Please enter the CPS property/payment code.'),
+  );
+
+  $form['submit'] = array(
+    '#type' => 'submit',
+    '#value' => t('Submit')
+  );
+
+  return $form;
+}
+
+/**
+* Define a form. The entry form for listing the charges from the property code. 
+*/
+function list_charges_by_prop_form() {
+  $form['list_charges_by_prop'] = array(
+    '#title' => t('Property code'),
+    '#type' => 'textfield',
+    '#description' => t('Please enter the CPS property/payment code.'),
   );
 
   $form['submit'] = array(
@@ -332,6 +263,36 @@ function add_payment_by_code_form_submit($form, &$form_state) {
   $nid = $result->fetchField();
   if($nid !== FALSE) { 
     $form_state['redirect'] = 'node/add/payment/'.$nid;
+  } else {
+    drupal_set_message("There is no property registered to that CPS code");
+  }
+}
+
+/** When the form is submitted we add the property code to the URL  
+ * so the view is rendered using the context from the URL. ::ISSUE 1::
+ **/
+function list_payments_by_prop_form_submit($form, &$form_state) {
+  $title = $form_state['values']['list_payments_by_prop'];
+  $type = 'property';
+  $result = db_query("SELECT n.nid FROM {node} n WHERE n.title = :title AND n.type = :type", array(":title"=> $title, ":type"=> $type));  
+  $nid = $result->fetchField();
+  if($nid !== FALSE) { 
+    $form_state['redirect'] = 'payment-by-property/'.$title;
+  } else {
+    drupal_set_message("There is no property registered to that CPS code");
+  }
+}
+
+/** When the form is submitted we add the property code to the URL  
+ * so the view is rendered using the context from the URL. ::ISSUE 1::
+ **/
+function list_charges_by_prop_form_submit($form, &$form_state) {
+  $title = $form_state['values']['list_charges_by_prop'];
+  $type = 'property';
+  $result = db_query("SELECT n.nid FROM {node} n WHERE n.title = :title AND n.type = :type", array(":title"=> $title, ":type"=> $type));  
+  $nid = $result->fetchField();
+  if($nid !== FALSE) { 
+    $form_state['redirect'] = 'charge-by-property/'.$title;
   } else {
     drupal_set_message("There is no property registered to that CPS code");
   }
