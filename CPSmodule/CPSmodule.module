@@ -179,6 +179,13 @@ function CPSmodule_menu() {
     'access arguments' => array('List Charge by Prop'),
     'type' => MENU_NORMAL_ITEM,
   );
+  $items['property_account_summary'] = array(
+    'title' => 'Property account summary',
+    'page callback' => 'CPSmodule_property_account_summary_view',
+    'page arguments' => array(1),
+    'access callback' => 'user_access',
+    'access arguments' => array('List Charge by Prop'),
+  );
   
   return $items;
 }
@@ -307,5 +314,119 @@ function list_charges_by_prop_form_submit($form, &$form_state) {
   }
 }
 
+/* Function to build a page to view payment and charge totals for a given
+   property. Will build a table of payment with a total, a table of charges
+   with a total and produce a balance*/
+function CPSmodule_property_account_summary_view($prop_nid) {
+  $prop_node = node_load($prop_nid);
+  //First we build a table of payments
+  $query = new EntityFieldQuery();
+  $query->entityCondition('entity_type', 'node')
+    ->entityCondition('bundle', 'payment');
+  $query->fieldCondition('field_payment_property', 'target_id', $prop_nid, '=');
+  $result = $query->execute();
+  $node_list = $result['node'];
+  $content = html_build_table_header('payment');
+  $payment_total = 0;
+  foreach ($node_list as $node_obj) {
+    $pay_node = node_load($node_obj -> nid);
+    $payment_total += $pay_node->field_payment_amount['und'][0]['amount'];
+    $content .= html_build_table_row($pay_node);
+  }
+  $content .= html_build_table_footer($payment_total);
+  
+  //Now we build a table of charges
+  $query = new EntityFieldQuery();
+  $query->entityCondition('entity_type', 'node')
+    ->entityCondition('bundle', 'charge');
+  $query->fieldCondition('field_charge_property_id', 'target_id', $prop_nid, '=');
+  $result = $query->execute();
+  $node_list = $result['node'];
+  $content .= html_build_table_header('charge');
+  $charge_total = 0;
+  foreach ($node_list as $node_obj) {
+    $charge_node = node_load($node_obj -> nid);
+    $charge_total += $charge_node->field_charge_amount['und'][0]['amount'];
+    $content .= html_build_table_row($charge_node);
+  }
+  $content .= html_build_table_footer($charge_total);
+  
+  return $content.'<p align="right">Balance: £'.($payment_total - $charge_total).'</p>';
+}
 
+function html_build_table_header($table_type){
+  $h_col1 = '';
+  $h_col2 = '';
+  $h_col3 = '';
+  
+  switch ($table_type) {
+    case 'payment':
+      $h_col1 = 'Payment';
+      $h_col2 = 'Date of payment';
+      $h_col3 = 'Amount';
+      break;
+    case 'charge':
+      $h_col1 = 'Charge';
+      $h_col2 = 'Type';
+      $h_col3 = 'Amount';
+  }
+  return '
+    <div>
+      <table>
+	<colgroup>
+	  <col span="1" style="width: 45%;">
+	  <col span="1" style="width: 45%;">
+	  <col span="1" style="width: 10%;">
+	  </colgroup>
+	<thead>
+	  <tr>
+	    <th>
+	      '.$h_col1.'
+	    </th>
+	    <th>
+	      '.$h_col2.'
+	    </th>
+	    <th>
+	      '.$h_col3.'
+	    </th>
+	  </tr>
+	</thead>
+	<tbody>';
+}
+
+function html_build_table_row($node) {
+  $html_string ='
+      <tr>
+	<td>
+	  <a href="/cps/?q=node/'.$node->nid.'">'.$node->title.'</a>
+	</td>
+	<td>
+	  '.($node->type == 'payment' ?
+	      $node->field_payment_date_received['und'][0]['value'] :
+	      $node->field_charge_type['und'][0]['tid']).'
+	</td>
+	<td>
+	  £'.($node->type == 'payment' ?
+	       $node->field_payment_amount['und'][0]['amount'] :
+	        $node->field_charge_amount['und'][0]['amount']).'
+	</td>
+      </tr>';
+  return $html_string;
+}
+
+function html_build_table_footer($total) {
+  return '
+	</tbody>
+	<tfoot>
+	  <tr>
+	    <th></th>
+	    <th></th>
+	    <th>
+	      £'.$total.'
+	    </th>
+	  </tr>
+	</tfoot>
+      </table>
+    </div>';
+}
 ?>
