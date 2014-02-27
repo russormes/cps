@@ -1,4 +1,13 @@
+TODO: 
+ Build the views pages for a given property to list all charges and payments with calculated fields for totals and balance outstanding. 
+ Ability to add charges to many properties at the same time. 
+ Revise code for good practicse and redundant code. 
+ Add properties and owners for second estate.
+ Send emails for owners contact details. 
+ A script to generate a report of owners that are behind in their payments. 
+ 
+
 ISSUE 1:: codes should be allocated to owners, not apartments. When one payment is made to cover more than one apartment which code is used? 
-ISSUE 2:: The payment allocation charge field is populated by a reference entiy view, but what about the case when we want to allocate a payment to charges from more than on property? Either all charges for a given owner need to be shown or we need two select lists, one to choose the property and the second to choose the charge. Could this be done by filtering the view used to populated the select box? Return all charges for properties for a given owner and then filter by property as shown in the video today?
-ISSUE 3:: Build the views pages for a given property to list all charges and payments with calculated fields for totals and balance outstanding. 
-ISSUE 4:: Site aunch. How to transfer the site to the CPS domain. 
+ISSUE 3::
+
+

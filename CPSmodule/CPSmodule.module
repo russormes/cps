@@ -6,6 +6,11 @@ function CPSmodule_form_charge_node_form_alter(&$form, &$form_state, $form_id) {
    $form['title']['#access'] = 0;
 }
 
+function CPSmodule_form_owner_node_form_alter(&$form, &$form_state, $form_id) {
+   //dpm("_owner_node_form_alter");
+   //$form['title']['#access'] = 0;
+}
+
 function CPSmodule_form_property_node_form_alter(&$form, &$form_state, $form_id) {
    //dpm("_property_node_form_alter");
    $form['field_property_service_charge'][LANGUAGE_NONE]['#ajax'] = array(
@@ -127,22 +132,23 @@ function CPSmodule_node_submit($node, $form, &$form_state) {
   //dpm("Called: _submit");
   $values = $form_state['values'];
   switch ($node->type) {
-      case 'payment':
-	$pnid = $values['field_payment_property']['und'][0]['target_id'];
-	$pnode = node_load($pnid);
-	$date = $form_state['input']['field_payment_date_received']['und'][0]['value']['date'];
-	$node->title = $pnode->title.' : £'.$values['field_payment_amount']['und'][0]['amount'].' : '.$date;
-	break;
-      case 'charge':
-	$pnid = $values['field_charge_property_id']['und'][0]['target_id'];
-	$ctypetid = $values['field_charge_type']['und'][0]['tid'];
-	$pnode = node_load($pnid);
-	$ctype = taxonomy_term_load($ctypetid);
-	$node->title = $pnode->title.' '.$ctype->name.': £'.$values['field_charge_amount']['und'][0]['amount'];
-	break;
+    case 'payment':
+      $pnid = $values['field_payment_property']['und'][0]['target_id'];
+      $pnode = node_load($pnid);
+      $date = $form_state['input']['field_payment_date_received']['und'][0]['value']['date'];
+      $node->title = $pnode->title.' : £'.$values['field_payment_amount']['und'][0]['amount'].' : '.$date;
+      break;
+    case 'charge':
+      $pnid = $values['field_charge_property_id']['und'][0]['target_id'];
+      $ctypetid = $values['field_charge_type']['und'][0]['tid'];
+      $pnode = node_load($pnid);
+      $ctype = taxonomy_term_load($ctypetid);
+      $node->title = $pnode->title.' '.$ctype->name.': £'.$values['field_charge_amount']['und'][0]['amount'];
+      break;
   }
 //dpm('_node_submit: ');
 }
+
 
 /**
  * Implements hook_menu().
@@ -204,9 +210,9 @@ function CPSmodule_permission() {
 */
 function add_payment_by_code_form() {
   $form['add_payment'] = array(
-    '#title' => t('Payment code'),
+    '#title' => t('Property code'),
     '#type' => 'textfield',
-    '#description' => t('Please enter the CPS payment code.'),
+    '#description' => t('Please enter the CPS property/payment code.'),
   );
 
   $form['submit'] = array(
@@ -224,7 +230,7 @@ function list_payments_by_prop_form() {
   $form['list_payments_by_prop'] = array(
     '#title' => t('Property code'),
     '#type' => 'textfield',
-    '#description' => t('Please enter the CPS property/payment code.'),
+    '#description' => t('Please enter the CPS property code.'),
   );
 
   $form['submit'] = array(
@@ -242,7 +248,7 @@ function list_charges_by_prop_form() {
   $form['list_charges_by_prop'] = array(
     '#title' => t('Property code'),
     '#type' => 'textfield',
-    '#description' => t('Please enter the CPS property/payment code.'),
+    '#description' => t('Please enter the CPS property code.'),
   );
 
   $form['submit'] = array(
@@ -253,13 +259,14 @@ function list_charges_by_prop_form() {
   return $form;
 }
 
-/** When the form is submitted we get the nid for the property that the payment is made against pass it 
- * to the add payment form via the URL. ::ISSUE 1::
+/** When the form is submitted we get the nid for the property that the payment
+ * is made against pass it to the add payment form via the URL. ::ISSUE 1::
  **/
 function add_payment_by_code_form_submit($form, &$form_state) {
   $title = $form_state['values']['add_payment'];
   $type = 'property';
-  $result = db_query("SELECT n.nid FROM {node} n WHERE n.title = :title AND n.type = :type", array(":title"=> $title, ":type"=> $type));  
+  $result = db_query("SELECT n.nid FROM {node} n WHERE n.title = :title AND
+		     n.type = :type", array(":title"=> $title, ":type"=> $type));  
   $nid = $result->fetchField();
   if($nid !== FALSE) { 
     $form_state['redirect'] = 'node/add/payment/'.$nid;
@@ -274,7 +281,8 @@ function add_payment_by_code_form_submit($form, &$form_state) {
 function list_payments_by_prop_form_submit($form, &$form_state) {
   $title = $form_state['values']['list_payments_by_prop'];
   $type = 'property';
-  $result = db_query("SELECT n.nid FROM {node} n WHERE n.title = :title AND n.type = :type", array(":title"=> $title, ":type"=> $type));  
+  $result = db_query("SELECT n.nid FROM {node} n WHERE n.title = :title AND
+		     n.type = :type", array(":title"=> $title, ":type"=> $type));  
   $nid = $result->fetchField();
   if($nid !== FALSE) { 
     $form_state['redirect'] = 'payment-by-property/'.$title;
@@ -289,7 +297,8 @@ function list_payments_by_prop_form_submit($form, &$form_state) {
 function list_charges_by_prop_form_submit($form, &$form_state) {
   $title = $form_state['values']['list_charges_by_prop'];
   $type = 'property';
-  $result = db_query("SELECT n.nid FROM {node} n WHERE n.title = :title AND n.type = :type", array(":title"=> $title, ":type"=> $type));  
+  $result = db_query("SELECT n.nid FROM {node} n WHERE n.title = :title AND
+		     n.type = :type", array(":title"=> $title, ":type"=> $type));  
   $nid = $result->fetchField();
   if($nid !== FALSE) { 
     $form_state['redirect'] = 'charge-by-property/'.$title;
@@ -297,4 +306,6 @@ function list_charges_by_prop_form_submit($form, &$form_state) {
     drupal_set_message("There is no property registered to that CPS code");
   }
 }
+
+
 ?>
