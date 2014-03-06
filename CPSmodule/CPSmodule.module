@@ -31,11 +31,15 @@ function CPSmodule_form_property_node_form_alter(&$form, &$form_state, $form_id)
     'callback' => 'CPSmodule_ajax_form_property_node_callback',
     'wrapper' => 'sc_payment_update',
   );
-  $form['field_property_sc_payments']['und']['#prefix'] = '<div id="sc_payment_update">';
+  $form['field_property_sc_payments']['und']['#prefix'] =
+				    '<div id="sc_payment_update">';
   $form['field_property_sc_payments']['und']['#suffix'] = '</div>';
-  $form['field_property_sc_payments']['und'][0]['amount']['#default_value'] = CPSmodule_sc_payments_value($form, $form_state);
-  $form_state['input']['field_property_sc_payments']['und'][0]['amount'] = CPSmodule_sc_payments_value($form, $form_state);
-  $form['field_property_sc_payments']['und'][0]['currency']['#default_value'] = "GBP";
+  $form['field_property_sc_payments']['und'][0]['amount']['#default_value'] =
+				CPSmodule_sc_payments_value($form, $form_state);
+  $form_state['input']['field_property_sc_payments']['und'][0]['amount'] =
+				CPSmodule_sc_payments_value($form, $form_state);
+  $form['field_property_sc_payments']['und'][0]['currency']['#default_value'] =
+									  "GBP";
   //dpm('form:');
   //dpm($form);
   //dpm('form_state[input]:');
@@ -179,12 +183,21 @@ function CPSmodule_menu() {
     'access arguments' => array('List Charge by Prop'),
     'type' => MENU_NORMAL_ITEM,
   );
+  $items['account_summary_by_code'] = array(
+    'title' => 'View property account',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('account_summary_by_code_form'),
+    'access callback' => 'user_access',
+    'access arguments' => array('Prop Account'),
+    'type' =>  MENU_NORMAL_ITEM,
+  );
   $items['property_account_summary'] = array(
     'title' => 'Property account summary',
     'page callback' => 'CPSmodule_property_account_summary_view',
-    'page arguments' => array(1),
+    'page arguments' => array(1,2,3),
     'access callback' => 'user_access',
-    'access arguments' => array('List Charge by Prop'),
+    'access arguments' => array('Prop Acc Summary'),
+    'type' => MENU_VISIBLE_IN_BREADCRUMB,
   );
   
   return $items;
@@ -237,7 +250,7 @@ function list_payments_by_prop_form() {
   $form['list_payments_by_prop'] = array(
     '#title' => t('Property code'),
     '#type' => 'textfield',
-    '#description' => t('Please enter the CPS property code.'),
+    '#description' => t('Please enter the CPS property/payment code.'),
   );
 
   $form['submit'] = array(
@@ -255,7 +268,7 @@ function list_charges_by_prop_form() {
   $form['list_charges_by_prop'] = array(
     '#title' => t('Property code'),
     '#type' => 'textfield',
-    '#description' => t('Please enter the CPS property code.'),
+    '#description' => t('Please enter the CPS property/payment code.'),
   );
 
   $form['submit'] = array(
@@ -263,6 +276,34 @@ function list_charges_by_prop_form() {
     '#value' => t('Submit')
   );
 
+  return $form;
+}
+
+function account_summary_by_code_form() {
+  $form['prop_code'] = array(
+    '#title' => t('Property code'),
+    '#type' => 'textfield',
+    '#description' => t('Please enter the CPS property/payment code.'),
+  );
+  $form['report_start_date'] = array(
+    '#title' => t('Start date'),
+    '#type' => 'date_popup',
+    '#description' => t('Please enter start date of the report.'),
+    '#default_value' => date('Y-m-d H:i', mktime(0, 0, 0, 1, 1, 2014)),
+    '#date_format' => 'd-m-Y',
+    '#description' => t('Please enter start date of the report.'), 
+  );
+  $form['report_end_date'] = array(
+    '#title' => t('End date'),
+    '#type' => 'date_popup',
+    '#description' => t('Please enter end date of the report.'),
+    '#default_value' => date('Y-m-d H:i'),
+    '#date_format' => 'd-m-Y',
+  );
+  $form['submit'] = array(
+    '#type' => 'submit',
+    '#value' => t('View report')
+  );
   return $form;
 }
 
@@ -308,7 +349,23 @@ function list_charges_by_prop_form_submit($form, &$form_state) {
 		     n.type = :type", array(":title"=> $title, ":type"=> $type));  
   $nid = $result->fetchField();
   if($nid !== FALSE) { 
-    $form_state['redirect'] = 'charge-by-property/'.$title;
+    $form_state['redirect'] = 'charge-by-property/'.$title; //Change this to nid
+  } else {
+    drupal_set_message("There is no property registered to that CPS code");
+  }
+}
+
+function account_summary_by_code_form_submit($form, &$form_state) {
+  $prop_code = $form_state['values']['prop_code'];
+  $start_date = $form_state['values']['report_start_date'];
+  $end_date = $form_state['values']['report_end_date'];
+  $type = 'property';
+  $result = db_query("SELECT n.nid FROM {node} n WHERE n.title = :title AND
+		     n.type = :type", array(":title"=> $prop_code, ":type"=> $type));  
+  $nid = $result->fetchField();
+  if($nid !== FALSE) { 
+    $form_state['redirect'] =
+      'property_account_summary/'.$nid.'/'.$start_date.'/'.$end_date;
   } else {
     drupal_set_message("There is no property registered to that CPS code");
   }
@@ -317,37 +374,56 @@ function list_charges_by_prop_form_submit($form, &$form_state) {
 /* Function to build a page to view payment and charge totals for a given
    property. Will build a table of payment with a total, a table of charges
    with a total and produce a balance*/
-function CPSmodule_property_account_summary_view($prop_nid) {
+function CPSmodule_property_account_summary_view($prop_nid, $start_date,
+						  $end_date) {
   $prop_node = node_load($prop_nid);
+  $date1 = new DateTime($start_date);
+  $date2 = new DateTime($end_date);
+  $content = '<h2>Report from: '.$date1->format('d/m/Y').' to:
+					  '.$date2->format('d/m/Y').'</h2>';
   //First we build a table of payments
+  $payment_total = 0;
   $query = new EntityFieldQuery();
   $query->entityCondition('entity_type', 'node')
-    ->entityCondition('bundle', 'payment');
-  $query->fieldCondition('field_payment_property', 'target_id', $prop_nid, '=');
+    ->entityCondition('bundle', 'payment')
+    ->fieldCondition('field_payment_property', 'target_id', $prop_nid, '=')
+    ->fieldCondition('field_payment_date_received', 'value', $date1->format('Y-m-d'), '>=')
+    ->fieldCondition('field_payment_date_received', 'value', $date2->format('Y-m-d'), '<=')
+    ->fieldOrderBy('field_payment_date_received', 'value', 'ASC');
   $result = $query->execute();
-  $node_list = $result['node'];
-  $content = html_build_table_header('payment');
-  $payment_total = 0;
-  foreach ($node_list as $node_obj) {
-    $pay_node = node_load($node_obj -> nid);
-    $payment_total += $pay_node->field_payment_amount['und'][0]['amount'];
-    $content .= html_build_table_row($pay_node);
+  if (isset($result['node'])) {
+    $node_list = $result['node'];
+    $content .= html_build_table_header('payment');
+    foreach ($node_list as $node_obj) {
+      $pay_node = node_load($node_obj->nid);
+      $payment_total += $pay_node->field_payment_amount['und'][0]['amount'];
+      $content .= html_build_table_row($pay_node);
+    }
+    $content .= html_build_table_footer($payment_total);
   }
-  $content .= html_build_table_footer($payment_total);
   
   //Now we build a table of charges
+  $charge_total = 0;
+  $content .= html_build_table_header('charge');
+  $interval = $date1->diff($date2);
+  $no_of_sc = $interval->m;
+  $sc_amount = $prop_node->field_property_sc_payments['und'][0]['amount'];
+  $charge_total += ($sc_amount * $no_of_sc);
+  $content .= html_build_service_charge_rows($prop_node, $date1, $date2);
   $query = new EntityFieldQuery();
   $query->entityCondition('entity_type', 'node')
-    ->entityCondition('bundle', 'charge');
-  $query->fieldCondition('field_charge_property_id', 'target_id', $prop_nid, '=');
+    ->entityCondition('bundle', 'charge')
+    ->fieldCondition('field_charge_property_id', 'target_id', $prop_nid, '=')
+    ->fieldCondition('field_charge_date', 'value', $start_date, '>=')
+    ->fieldCondition('field_charge_date', 'value', $end_date, '<=');
   $result = $query->execute();
-  $node_list = $result['node'];
-  $content .= html_build_table_header('charge');
-  $charge_total = 0;
-  foreach ($node_list as $node_obj) {
-    $charge_node = node_load($node_obj -> nid);
-    $charge_total += $charge_node->field_charge_amount['und'][0]['amount'];
-    $content .= html_build_table_row($charge_node);
+  if (isset($result['node'])) {
+    $node_list = $result['node'];
+    foreach ($node_list as $node_obj) {
+      $charge_node = node_load($node_obj -> nid);
+      $charge_total += $charge_node->field_charge_amount['und'][0]['amount'];
+      $content .= html_build_table_row($charge_node);
+    }
   }
   $content .= html_build_table_footer($charge_total);
   
@@ -374,9 +450,9 @@ function html_build_table_header($table_type){
     <div>
       <table>
 	<colgroup>
-	  <col span="1" style="width: 45%;">
-	  <col span="1" style="width: 45%;">
-	  <col span="1" style="width: 10%;">
+	  <col span="1" style="width: 40%;">
+	  <col span="1" style="width: 40%;">
+	  <col span="1" style="width: 20%;">
 	  </colgroup>
 	<thead>
 	  <tr>
@@ -394,7 +470,37 @@ function html_build_table_header($table_type){
 	<tbody>';
 }
 
+function html_build_service_charge_rows($prop_node, $s_date, $f_date) {
+  $sc_amount = $prop_node->field_property_sc_payments['und'][0]['amount'];
+  $sc_freq = $prop_node->field_property_sc_frequency['und'][0]['value'];
+  $interval = $s_date->diff($f_date);
+  $noc = $interval->m;
+  $s_date->modify('-1 month');
+  $html_string = '';
+  for ($i=0; $i<=$noc; $i++) {
+    $s_date->modify('+1 month');
+    $html_string .= '<tr>
+	<td>
+	  Service Charge : '.$s_date->format('F').'
+	</td>
+	<td>
+	  <a href="/cps/?q=taxonomy/term/2">Service Charge</a>
+	</td>
+	<td>
+	  '.$sc_amount.'
+	</td>
+      </tr>';
+  }
+  return $html_string;
+}
+
 function html_build_table_row($node) {
+  if ($node->type == 'charge') {
+    $term = taxonomy_term_load($node->field_charge_type['und'][0]['tid']);
+    $term_name = $term->name;
+  } else {
+    $date = date_create($node->field_payment_date_received['und'][0]['value']);
+  }
   $html_string ='
       <tr>
 	<td>
@@ -402,8 +508,8 @@ function html_build_table_row($node) {
 	</td>
 	<td>
 	  '.($node->type == 'payment' ?
-	      $node->field_payment_date_received['und'][0]['value'] :
-	      $node->field_charge_type['und'][0]['tid']).'
+	      date_format($date, 'd/m/Y') : '<a href="/cps/?q=taxonomy/term/
+	      '.$node->field_charge_type['und'][0]['tid'].'">'.$term_name).'</a>
 	</td>
 	<td>
 	  £'.($node->type == 'payment' ?
