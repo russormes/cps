@@ -221,6 +221,14 @@ function CPSmodule_permission() {
       'title' => t('List charges by prop'),
       'description' => t('Allow users to list charges by entering property code'),
     ),
+    'Prop Account' => array(
+      'title' => t('Account summary by prop'),
+      'description' => t('Allow users to select an account summary by entering the property code and dates'),
+    ),
+    'Prop Acc Summary' => array(
+      'title' => t('Account summary view page'),
+      'description' => t('Allow users to see an account summary as selected'),
+    )
   );
 }
 
