@@ -7,7 +7,8 @@ require 'CPSmodule.node.php';
  * properties. The routes are set here and the code for building
  * forms and pages is loaded from CPSmodule.pages.php. We use the .php extension
  * and not the conventional .inc as a security precaution, .inc not parsed
- * as php files and so can exposed the the browser if you know the direct url. 
+ * as php files and so can exposed the the browser if you know the direct url.
+ * http://stackoverflow.com/questions/7129842/what-is-inc-and-why-to-use-it
  */
 function CPSmodule_menu() {
 
