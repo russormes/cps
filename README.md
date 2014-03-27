@@ -6,5 +6,5 @@ This is the custom module written for a a php application using the Drupal frame
 * recording of payments against properties,
 * generation of account statements,
 * export of account statements to excel files,
-* owner access to their details and account summaries.
-* owner access to their details and account summaries.
+* owner access to their details and account summaries. (todo)
+* owner access to their details and account summaries. (todo)
