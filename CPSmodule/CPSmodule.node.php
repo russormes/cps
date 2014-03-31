@@ -17,10 +17,6 @@ function CPSmodule_form_property_node_form_alter(&$form, &$form_state, $form_id)
     'wrapper' => 'sc_payment_update',
   );
    $form['field_property_sc_frequency'][LANGUAGE_NONE]['#ajax'] = array(
-    // When 'event' occurs, Drupal will perform an ajax request in the
-    // background. Usually the default value is sufficient (eg. change for
-    // select elements), but valid values include any jQuery event,
-    // most notably 'mousedown', 'blur', and 'submit'.
     //'event' => 'change',
     'callback' => 'CPSmodule_ajax_form_property_node_callback',
     'wrapper' => 'sc_payment_update',

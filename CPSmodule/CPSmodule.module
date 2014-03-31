@@ -1,6 +1,7 @@
 <?php
 //Bring in the methods implemneting node hooks. 
-require 'CPSmodule.node.php'; 
+require 'CPSmodule.node.php';
+require 'CPSmodule.export.php'; 
 /**
  * Implements hook_menu().
  * We add custom pages for adding and listing charges and payments to

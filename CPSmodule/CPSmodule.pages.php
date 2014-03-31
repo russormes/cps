@@ -233,6 +233,7 @@ function CPSmodule_property_account_summary_view($prop_nid, $start_date,
   //Add the account balance in the table footer. 
   return $content.'<p align="right">Balance: £'.($payment_total -
                                                    $charge_total).'</p>';
+
 }
 
 /*A group of helper funtions to build the HTML for the account summary table.
