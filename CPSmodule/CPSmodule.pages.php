@@ -138,6 +138,14 @@ function account_summary_by_code_form() {
   return $form;
 }
 
+function export_form() {
+  $form['submit'] = array(
+    '#type' => 'submit',
+    '#value' => t('Export')
+    );
+  return $form;
+}
+
 /** When the form is submitted we add the property nid and the report dates
  * to the URL for use in building the report.
  * See: CPSmodule_property_account_summary_view()
@@ -160,7 +168,7 @@ function account_summary_by_code_form_submit($form, &$form_state) {
 }
 
 /* Function to build a page to view payment and charge totals for a given
-   property. Will build a table of payment with a total, a table of charges
+   property. Will build a table of payments with a total, a table of charges
    with a total and produce a balance*/
 function CPSmodule_property_account_summary_view($prop_nid, $start_date,
 						  $end_date) {
@@ -169,8 +177,13 @@ function CPSmodule_property_account_summary_view($prop_nid, $start_date,
   building the report.*/
   $date1 = new DateTime($start_date);
   $date2 = new DateTime($end_date);
-  $content = '<h2>Report from: '.$date1->format('d/m/Y').' to:
-					  '.$date2->format('d/m/Y').'</h2>';
+  $output = array(
+    'report_heading' => array(
+      '#type' => 'markup',
+      '#markup' => '<h2>Report from: '.$date1->format('d/m/Y').' to: ' .
+						$date2->format('d/m/Y').'</h2>',
+    )
+  );
   //First we build a table of payments
   $payment_total = 0; //keep a running total of payments made
   /*Build the database query using the property nodeId and the start and end dates
@@ -188,17 +201,38 @@ function CPSmodule_property_account_summary_view($prop_nid, $start_date,
     ->fieldOrderBy('field_payment_date_received', 'value', 'ASC');
   $result = $query->execute();
   //Only build the payments table is some payments exit.
+  $colgroups = array(
+		 array('span' => array('1'), 'style' => array('width: 40%')),
+		 array('span' => array('1'), 'style' => array('width: 40%')),
+		 array('span' => array('1'), 'style' => array('width: 20%')),
+	       );
   if (isset($result['node'])) { 
     $node_list = $result['node'];
-    $content .= html_build_table_header('payment');
+    $output['payment_table'] = array(
+      '#theme' => 'table',
+      '#header' => array(t('Payment'), t('Date of payment'), t('Amount')),
+      '#rows' => array(),
+      '#colgroups' => array($colgroups),
+    );
     /*Each property will not have many associated payments so we can go ahead
      *and load the nodes.*/
     foreach ($node_list as $node_obj) {
       $pay_node = node_load($node_obj->nid);
       $payment_total += $pay_node->field_payment_amount['und'][0]['amount'];
-      $content .= html_build_table_row($pay_node);
+      $cell1 = '<a href="/cps/?q=node/' . $pay_node->nid . '">' .
+						      $pay_node->title.'</a>';
+      $cell2 = date_format(
+		date_create(
+		  $pay_node->field_payment_date_received['und'][0]['value']
+		), 'd/m/Y'
+	      );
+      $cell3 = '£'. $pay_node->field_payment_amount['und'][0]['amount'];
+      $output['payment_table']['#rows'][] = array($cell1, $cell2, $cell3);
     }
-    $content .= html_build_table_footer($payment_total);
+    $output['payment_total'] = array(
+      '#type' => 'markup',
+      '#markup' => '<div align="right">Total: £'.$payment_total.'</div>',
+    );
   }
   
   //Now we build a table of charges
@@ -206,13 +240,28 @@ function CPSmodule_property_account_summary_view($prop_nid, $start_date,
   /*There will be at least one charge so go ahead and build the table.
   The report adds one service charge payment for each month on the report, so
   we need to calculate the difference btween start and end date in months*/
-  $content .= html_build_table_header('charge');
+  $output['charge_table'] = array(
+      '#theme' => 'table',
+      '#header' => array(t('Charge'), t('Type'), t('Amount')),
+      '#rows' => array(),
+      '#colgroups' => array($colgroups),
+    );
+  /*It was decided not to store service charges and charge nodes and to simply
+    generate the service charge balance when required from the service charge amount
+    frequency of payment and current month. This may change in the future,
+    depending on client feedback.*/
   $interval = $date1->diff($date2);
   $no_of_sc = $interval->m;
   $sc_amount = $prop_node->field_property_sc_payments['und'][0]['amount'];
   //This ignores the option to pay the sc other than monthly. Needs updating. 
   $charge_total += ($sc_amount * $no_of_sc); 
-  $content .= html_build_service_charge_rows($prop_node, $date1, $date2);
+  for ($i=0; $i<=$no_of_sc; $i++) {
+    $cell1 = 'Service Charge : '.$date1->format('F');
+    $cell2 = '<a href="/cps/?q=taxonomy/term/2">Service Charge</a>';
+    $cell3 = '£'. $sc_amount;
+    $output['charge_table']['#rows'][] = array($cell1, $cell2, $cell3);
+    $date1->modify('+1 month');
+  }
   //Get the nids for all charges between the two dates. 
   $query = new EntityFieldQuery();
   $query->entityCondition('entity_type', 'node')
@@ -226,129 +275,35 @@ function CPSmodule_property_account_summary_view($prop_nid, $start_date,
     foreach ($node_list as $node_obj) {
       $charge_node = node_load($node_obj -> nid);
       $charge_total += $charge_node->field_charge_amount['und'][0]['amount'];
-      $content .= html_build_table_row($charge_node);
+      $term = taxonomy_term_load($charge_node->field_charge_type['und'][0]['tid']);
+      $term_name = $term->name;
+      $cell1 = '<a href="/cps/?q=node/' . $charge_node->nid . '">' .
+						      $charge_node->title.'</a>';
+      $cell2 = '<a href="/cps/?q=taxonomy/term/' .
+		  $charge_node->field_charge_type['und'][0]['tid'] .
+		  '">'.$term_name.'</a>';
+      $cell3 = '£'. $charge_node->field_charge_amount['und'][0]['amount'];
+      $output['charge_table']['#rows'][] = array($cell1, $cell2, $cell3);
     }
   }
-  $content .= html_build_table_footer($charge_total);
-  //Add the account balance in the table footer. 
-  return $content.'<p align="right">Balance: £'.($payment_total -
-                                                   $charge_total).'</p>';
-
+  //Add the charge total below the table. 
+  $output['charge_total'] = array(
+      '#type' => 'markup',
+      '#markup' => '<div align="right">Total: £'.$charge_total.'</div>',
+    );
+    //Add the account balance. 
+  $output['report_total'] = array(
+      '#type' => 'markup',
+      '#markup' => '<p align="right">Balance: £'.($payment_total -
+                                                   $charge_total).'</p>',
+    );
+  $export_form = drupal_get_form('export_form');
+  $output['export_report'] = array(
+      '#type' => 'markup',
+      '#markup' => '<div align="right">' . drupal_render($export_form) . '</div>',
+    );
+  
+  return $output;
 }
 
-/*A group of helper funtions to build the HTML for the account summary table.
-so far we ignore CSS and just default to the theme settings. */
-function html_build_table_header($table_type){
-  $h_col1 = '';
-  $h_col2 = '';
-  $h_col3 = '';
-  //Set column names depending on table type. 
-  switch ($table_type) {
-    case 'payment':
-      $h_col1 = 'Payment';
-      $h_col2 = 'Date of payment';
-      $h_col3 = 'Amount';
-      break;
-    case 'charge':
-      $h_col1 = 'Charge';
-      $h_col2 = 'Type';
-      $h_col3 = 'Amount';
-  }
-  return '
-    <div>
-      <table>
-	<colgroup>
-	  <col span="1" style="width: 40%;">
-	  <col span="1" style="width: 40%;">
-	  <col span="1" style="width: 20%;">
-	  </colgroup>
-	<thead>
-	  <tr>
-	    <th>
-	      '.$h_col1.'
-	    </th>
-	    <th>
-	      '.$h_col2.'
-	    </th>
-	    <th>
-	      '.$h_col3.'
-	    </th>
-	  </tr>
-	</thead>
-	<tbody>';
-}
-
-/*It was decided not to store service charges and charge nodes and to simply
-generate the service charge balance when required from the service charge amount
-frequency of payment and current month. This may change in the future,
-depending on client feedback.*/
-function html_build_service_charge_rows($prop_node, $s_date, $f_date) {
-  $sc_amount = $prop_node->field_property_sc_payments['und'][0]['amount'];
-  //So far we ignore this option. Needs updating. 
-  $sc_freq = $prop_node->field_property_sc_frequency['und'][0]['value'];
-  $interval = $s_date->diff($f_date);
-  $noc = $interval->m;
-  $html_string = '';
-  //Add one service charge payment for each month. 
-  for ($i=0; $i<=$noc; $i++) {
-    $html_string .= '<tr>
-	<td>
-	  Service Charge : '.$s_date->format('F').'
-	</td>
-	<td>
-	  <a href="/cps/?q=taxonomy/term/2">Service Charge</a>
-	</td>
-	<td>
-	  '.$sc_amount.'
-	</td>
-      </tr>';
-     $s_date->modify('+1 month');
-  }
-  return $html_string;
-}
-
-/*Helper function to build individual rows in the html table from charge
-or payment nodes.*/
-function html_build_table_row($node) {
-  if ($node->type == 'charge') {
-    $term = taxonomy_term_load($node->field_charge_type['und'][0]['tid']);
-    $term_name = $term->name;
-  } else {
-    $date = date_create($node->field_payment_date_received['und'][0]['value']);
-  }
-  $html_string ='
-      <tr>
-	<td>
-	  <a href="/cps/?q=node/'.$node->nid.'">'.$node->title.'</a>
-	</td>
-	<td>
-	  '.($node->type == 'payment' ?
-	      date_format($date, 'd/m/Y') : '<a href="/cps/?q=taxonomy/term/
-	      '.$node->field_charge_type['und'][0]['tid'].'">'.$term_name).'</a>
-	</td>
-	<td>
-	  £'.($node->type == 'payment' ?
-	       $node->field_payment_amount['und'][0]['amount'] :
-	        $node->field_charge_amount['und'][0]['amount']).'
-	</td>
-      </tr>';
-  return $html_string;
-}
-
-/*Add the balance to the table footer*/
-function html_build_table_footer($total) {
-  return '
-	</tbody>
-	<tfoot>
-	  <tr>
-	    <th></th>
-	    <th></th>
-	    <th>
-	      £'.$total.'
-	    </th>
-	  </tr>
-	</tfoot>
-      </table>
-    </div>';
-}
 ?>
